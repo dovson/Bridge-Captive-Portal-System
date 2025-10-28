@@ -32,6 +32,22 @@ This was part of my deep dive into **Windows kernel networking** and **network a
 4. **Billing System** records data usage and applies access limits or policies.  
 5. **Database Layer** (Radix Tree) manages active sessions efficiently.
 
+
+## 🐍 System Architecture ------ Python Web Server Integration
+
+The web interface for the captive portal is built using **Python**, which serves as a bridge between the user's browser and the kernel-mode driver.
+
+- The Python server listens on TCP port 80/443 and serves the login and status pages.
+- When a user logs in, the server communicates with the NDIS filter driver via **TCP sockets** on localhost.
+- This communication allows the driver to authorize users, update billing data, and modify access states.
+
+### 🔌 Communication Flow
+
+1. Browser → Python Web Server (HTTP POST /login)
+2. Python → Driver (TCP socket message with authentication payload)
+3. Driver → Python (response with status: success/fail, quota, session info)
+4. Python → Browser (renders success page or error)
+
 ---
 
 ## 💻 Technologies & Tools Used
