@@ -1,6 +1,9 @@
 # 🧩 Captive Portal Project (NDIS Filter + Internal DHCP/DNS)
 
-![Captive Portal Demo](images/demo_screenshot.png)
+![Bridge Captive Portal Demo](images/captive_portal.png)
+
+
+![Bridge Captive Portal Demo](images/GUI.png)
 
 ## 📖 Overview
 This project is a custom-built **captive portal system** designed for Windows, implementing a **network-level access control system** using a custom **NDIS filter driver**.
