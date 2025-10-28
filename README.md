@@ -1,89 +1,144 @@
-# 🧩 Captive Portal Project (NDIS Filter + Internal DHCP/DNS)
+# 🧩 Captive Portal Project (NDIS Filter + Internal DHCP/DNS + GUI + Local Database)
 
-![Bridge Captive Portal Demo](images/captive_portal.png)
-
-
-![Bridge Captive Portal Demo](images/GUI.png)
+![System Architecture](images/architecture.png)
 
 ## 📖 Overview
-This project is a custom-built **captive portal system** designed for Windows, implementing a **network-level access control system** using a custom **NDIS filter driver**.
+This project is a **custom captive portal system** for Windows, implementing a **network-level access control system** using a **kernel-mode NDIS filter driver**.  
 
-It intercepts packets at the data-link layer to manage user sessions, authentication, and data accounting — similar to commercial solutions used by ISPs and enterprise networks.
+It manages user authentication, session tracking, traffic control, and user management via a **desktop GUI** while maintaining a **high-performance local database** built with **pure C structures**.  
 
-This was part of my deep dive into **Windows kernel networking** and **network access control (NAC)** systems.
+The system emphasizes **security, performance, and full control over network traffic**, protecting against unauthorized devices or servers.
 
 ---
 
 ## ⚙️ Key Features
-- 🔒 **NDIS Filter Driver:** Intercepts and manages packets at the OSI Layer 2 level.
-- 🌐 **Built-in DHCP & DNS Servers:** Internal DHCP assigns IPs, and DNS redirects clients to a captive web page.
-- 💡 **Integrated Web Server:** Serves the login and status portal directly from a lightweight custom HTTP server.
-- 🧮 **User Billing System:** Tracks data usage per session, billing by bytes sent/received.
-- 🧠 **Radix Tree Database:** High-performance in-memory structure for user sessions and lookups.
-- 🧾 **Encrypted Storage:** User data saved with XOR-based lightweight encryption.
-- ⚡ **Cross-Platform Web Interface:** Frontend communicates via a DLL with the kernel driver, making it compatible with most web servers (IIS, Apache, Nginx).
+- 🔒 **NDIS Filter Driver:** Intercepts and manages packets at OSI Layer 2.
+- 🌐 **Built-in DHCP & DNS Servers**
+  - Assigns IPs to clients
+  - Redirects traffic to the captive portal
+  - Protects by enforcing **gateway, DHCP, and DNS MAC/IP checks**
+- 🌐 **Local DNS Parser**
+  - Resolves captive portal hostname internally
+  - Eliminates dependency on external DNS for initial redirection
+- 🐍 **Python Web Server**
+  - Serves login pages and session info
+  - Communicates with the driver via **TCP sockets**
+- 🖥️ **GUI**
+  - User and session management
+  - Network adapter configuration
+- 🧮 **Local Database**
+  - Stores user accounts, session states, and configuration using **pure C structures**
+  - Efficient lookups with a **Radix Tree** for active sessions
+- 🧾 **Encrypted Storage**
+  - XOR-based encryption for sensitive data
+- ⚡ **Cross-Platform Web Interface**
+  - Frontend communicates with the driver via a DLL
+- 🧾 **Billing System**
+  - Tracks data usage per client
 
 ---
 
 ## 🏗️ System Architecture
 
-![Architecture Diagram](images/architecture.png)
+![System Architecture](images/architecture.png)
 
-1. **NDIS Filter Driver** captures packets and checks user authentication status.  
-2. **Internal DHCP/DNS** handles pre-authentication requests.  
-3. **Web Server Module** communicates with the driver via DeviceIoControl.  
-4. **Billing System** records data usage and applies access limits or policies.  
-5. **Database Layer** (Radix Tree) manages active sessions efficiently.
+1. **Client Devices:** Laptops, phones, or other networked devices (PPPoE/IPoE).  
+2. **Bridge Captive Portal System:** NDIS filter, Python web server, internal DHCP/DNS, local database.  
+3. **Backend Services:** Gateway, DHCP Server, DNS Server (with MAC/IP enforcement).  
+4. **GUI & Administration:** Desktop interface communicates with backend and driver.
 
+---
 
-## 🐍 System Architecture ------ Python Web Server Integration
+## 🌐 Built-in Local DNS Parser
 
-The web interface for the captive portal is built using **Python**, which serves as a bridge between the user's browser and the kernel-mode driver.
+The system includes a **lightweight internal DNS parser** that intercepts and processes DNS requests locally:
 
-- The Python server listens on TCP port 80/443 and serves the login and status pages.
-- When a user logs in, the server communicates with the NDIS filter driver via **TCP sockets** on localhost.
-- This communication allows the driver to authorize users, update billing data, and modify access states.
+- Matches requests against the portal hostname
+- Responds directly to clients without needing external DNS
+- Provides fast redirection and offline operation
 
-### 🔌 Communication Flow
+**Example Flow:**
+1. Client sends DNS query for `bridge.local`.  
+2. NDIS filter intercepts and parses the request.  
+3. If domain matches the captive portal hostname:
+   - Responds with internal IP
+4. Otherwise, forwards to an external DNS server.
 
-1. Browser → Python Web Server (HTTP POST /login)
-2. Python → Driver (TCP socket message with authentication payload)
-3. Driver → Python (response with status: success/fail, quota, session info)
-4. Python → Browser (renders success page or error)
+Implementation Highlights:
+- Custom DNS header parsing
+- Dynamic hostname recognition
+- Packet crafting for DNS responses
+- Fully implemented without external libraries
+
+---
+
+## 🐍 Python Web Server
+
+The Python web server provides a bridge between the browser and the kernel-mode driver:
+
+- Listens on TCP port 80/443
+- Handles login and session requests
+- Communicates with the driver using **local TCP sockets** for authentication, session updates, and quota tracking
+
+> TCP sockets are used for driver communication; WebSockets are optional for live browser updates to the frontend.
+
+---
+
+## 🖥️ Graphical User Interface (GUI)
+
+The desktop GUI allows administration of users, sessions, and network adapters:
+
+**Key Features:**
+- **User Management:** Add/edit/remove users, view sessions, set quotas
+- **Network Adapter Configuration:** Detect adapters, assign IP ranges, configure modes (bridged/NAT)
+- **Real-Time Status Monitoring:** Track connected clients, bandwidth, session duration
+- **Logging & Notifications:** Activity logs, quota alerts, driver messages
+
+**Implementation Notes:**
+- Built using **C# Windows Forms** (or WPF)
+- Communicates with the Python web server via TCP sockets
+- Abstracts low-level kernel networking complexity for administrators
+
+**Screenshot Example:**
+![Admin Dashboard](images/gui_dashboard.png)
+
+---
+
+## 🗄️ Local Database
+
+The captive portal maintains a **high-performance local database**:
+
+- Implemented using **pure C structures** (no external DB dependencies)
+- Stores:
+  - User accounts
+  - Session states
+  - Configuration parameters
+- Efficient lookup with **Radix Tree**
+- Data is encrypted (XOR-based) when stored on disk
+
+---
+
+## 📡 Traffic Flow
+
+### Logged-in Devices
+- Traffic is **forwarded normally** to the network
+- Users can access the Internet according to assigned bandwidth/quotas
+
+### Unlogged-in Devices
+- **HTTP:** Clients are redirected with **HTTP 302** to the captive portal login page
+- **Other traffic:** Packets are dropped
+- Enforces MAC/IP checks for gateway, DHCP, and DNS to prevent unauthorized external servers
 
 ---
 
 ## 💻 Technologies & Tools Used
 | Category | Technologies |
-|-----------|---------------|
-| **Languages** | C, C++, C#, Visual Basic |
+|----------|---------------|
+| **Languages** | C, C++, C#, Python, Visual Basic |
 | **Kernel Framework** | Windows Driver Kit (WDK) |
-| **Networking** | NDIS, PPPoE, DHCP, DNS |
-| **Data Handling** | Custom Radix Tree, XOR Encryption |
+| **Networking** | NDIS, PPPoE, DHCP, DNS, TCP Sockets |
+| **Data Handling** | Local database with C structures, Radix Tree, XOR Encryption |
 | **Frontend** | ASP.NET / Bootstrap |
-| **Integration** | DeviceIoControl API |
-
----
-
-## 🎯 What This Project Demonstrates
-- Deep understanding of **network protocol stacks** and **kernel-level programming**.  
-- Expertise in **Windows networking**, **NDIS architecture**, and **packet filtering**.  
-- Ability to design **end-to-end systems** combining kernel drivers, databases, and web interfaces.  
-- Strong focus on **performance, security, and modular design**.
-
----
-
-## 📸 Screenshots
-
-| Login Page | Session Dashboard |
-|-------------|------------------|
-| ![Login Page](images/login_page.png) | ![Dashboard](images/dashboard.png) |
-
----
-
-## 🔐 Note
-The actual **source code is private** for security and proprietary reasons.  
-This repository is intended as a **technical showcase** of my design, architecture, and engineering approach.
 
 ---
 
@@ -94,6 +149,7 @@ This repository is intended as a **technical showcase** of my design, architectu
 
 ---
 
-## 🧠 Related Work
-- **PPPoE Server Project** – Implemented authentication and accounting via CHAP.
-- **NAT Gateway System** – Custom packet-forwarding module with traffic shaping.
+## 🖼️ Screenshot Examples
+| Admin Dashboard | Login Page | Architecture |
+|-----------------|-----------|-------------|
+| ![Dashboard](images/gui_dashboard.png) | ![Login](images/login_page.png) | ![Architecture](images/architecture.png) |
